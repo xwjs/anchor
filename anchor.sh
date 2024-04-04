@@ -1,118 +1,64 @@
 #! /usr/bin/bash
 
+# set adaptable color
+
 STORAGE_DIR='/home/cpp'
 STORAGE_FILE='.anchor'
-declare -A ANCHORS
+
+declare -A COLOR
+declare -A l_ANCHORS
 declare -A g_ANCHORS
 
+case "$TERM" in
+    xterm-color|*-256color) color_prompt=yes;;
+esac
 
-add(){
-    local anchor="$1"
-    local path="$2"
-    local storage="$3"
+if [ "$color_prompt" = yes ]; then
+    COLOR['YELLOW']='\033[1;33m'
+    COLOR['QING']='\033[1;36m'
+    COLOR['RED']='\033[01;31m'
+    COLOR['GREEN']='\033[01;32m'
+    COLOR['BLUE']='\033[01;34m'
+    COLOR['NC']='\033[0m'
+fi
 
 
-    if [ -n "${ANCHORS["$anchor"]}" ]; then
-        echo "[$anchor] already exists: ${ANCHORS[$anchor]}"
-        read -p "Do you want to update it? (y/n): " choice
+# copyright
 
-        case "$choice" in
-            y|Y )
-                ANCHORS["$anchor"]="$path"
-
-                if [ "$storage" -eq 1  ];then
-                    g_ANCHORS["$anchor"]="$path"
-                    echo "$1"="$2" >> ${STORAGE_DIR}/${STORAGE_FILE}
-                    echo "[$anchor] -> ${ANCHORS[$anchor]} (global)"
-                else
-                    if [ -n g_ANCHORS["$anchor"]  ];then
-                        unset g_ANCHORS["$anchor"]
-                    fi
-
-                    echo "[$anchor] -> ${ANCHORS[$anchor]} (local)"
-                fi
-
-                return 0
-                ;;
-            * )
-                echo "[$anchor] does not update"
-                return 1
-                ;;
-        esac
-    else
-        ANCHORS["$anchor"]="$path"
-
-        if [ "$storage" -eq 1 ];then
-            g_ANCHORS["$anchor"]="$path"
-            echo "$1"="$2" >> ${STORAGE_DIR}/${STORAGE_FILE}
-            echo "[$anchor] -> ${ANCHORS[$anchor]} (global)"
-        else
-            if [ -n g_ANCHORS["$anchor"]  ];then
-                unset g_ANCHORS["$anchor"]
-            fi
-
-            echo "[$anchor] -> ${ANCHORS[$anchor]} (local)"
-        fi
-
-        return 0
-    fi
-
+copyright()
+{
+    printf "${COLOR['RED']}Powered by xwj\u00A9anchor${COLOR['NC']} "
 }
 
+# help
 help(){
+copyright
+
+printf "${COLOR['YELLOW']}help${COLOR['NC']} \n\n"
+
+
 cat << EOF
 command:
 
-    load_anchor                         load storage file from anchors.sh's STORAGE_DIR/STORAGE_FILE
+    load                         load storage file which path is  STORAGE_DIR/STORAGE_FILE
 
-    list_anchor                         show all anchor-path, red for global,white for local 
+    list                         show all anchor-path
 
-    goto_anchor <anchor>                change directory to anchor points
+    goto <anchor>                change directory to anchor points
 
-    add_anchor  <anchor> [path] [opt]   add or update anchor-path
-                                        if the arg path doesnt exist, default path is the dir runing this command
-                                        if the arg opt  doesnt exist, default visibility is local (destroyed when logged out)
+    add  <anchor> <path> [opt]   add or update anchor-path
+                                 if the arg opt  doesnt exist, default visibility is local 
 
-options:
+    clr <anchor>                 remove anchor-path
 
-    -g                                  add global anchor (available every log in)
-
+opt:
+    -l                           local anchor  (init nothing every time log in)
+    -g                           global anchor (available every log in)
 
 EOF
 }
 
-
-anchor_help(){
-    help
-}
-
-check_anchor(){
-    if [[ -n "$1" ]]; then
-        return 0  
-    else
-        return 1  
-    fi
-}
-
-# path exist
-check_path(){
-    if [[ -e "$1"  ]]; then
-        return 0 
-    else
-        echo "path:{$1} does not exist"
-        return 1
-    fi
-}
-
-check_option(){
-    if [[ "$1" == "-g" ]]; then
-        return 0 
-    else
-        return 1
-    fi
-}
-
-
+# path
 parse_path(){
     local path="$1"
     local prefix="$2"
@@ -128,79 +74,83 @@ parse_path(){
     echo "$(realpath "$path")"
 }
 
-add_anchor(){
+# valid input
+is_valid_anchor()
+{
+    local anchor="$1"
 
-    if [ "$#" -eq 1 ]; then
-        check_anchor "$1"
-        if [ "$?" -eq 0 ];then
-            add "$1" "$(pwd)" 0
-        else
-            help
-            return 1
-        fi
-
-    elif [ "$#" -eq 2 ]; then
-        local path=$(parse_path "$2" "$(pwd)" )
-
-        check_anchor "$1"
-        if [ "$?" -eq 1 ];then
-            help
-            return 1
-        fi
-
-        check_path "$path"
-        if [ "$?" -eq 0 ];then
-            add "$1" "$path" 0
-            return 0
-        fi
-
-        check_option "$2"
-        if [ "$?" -eq 0 ];then
-            add "$1" "$2" 1
-            return 0
-        fi
-
-        help
-
+    if [[  "$anchor" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$  ]];then
         return 1
-
-    elif [ "$#" -eq 3 ]; then
-
-        check_anchor "$1"
-        if [ "$?" -eq 1 ];then
-            help
-            return 1
-        fi
-
-        local path=$(parse_path "$2" "$(pwd)" )
-        check_path "$path"
-        if [ "$?" -eq 1 ];then
-            help
-            return 1
-        fi
-
-        check_option "$3"
-        if [ "$?" -eq 1  ];then
-            help
-            return 1
-        fi
-        
-        add "$1" "$path" 1
-        return 0
     else
-        help
-        return 1
+        return 0
     fi
 }
 
 
-load_anchor(){
+is_valid_path()
+{
+    local path="$1"
+
+    if [ -d "$path" ];then
+        return 1
+    else
+        return 0
+    fi
+}
+
+
+is_valid_arg()
+{
+    local arg="$1"
+
+    if [ "$arg" == '-g' ] || [ "$arg" == '-l' ];then
+        return 1
+    else 
+        return 0
+    fi
+}
+
+valid()
+{
+    is_valid_anchor "$1"
+    
+    if [ "$?" -eq 0 ];then
+        return 0
+    fi
+
+     is_valid_path "$2"
+    
+    if [ "$?" -eq 0 ];then
+        return 0
+    fi
+
+    is_valid_arg "$3"
+    
+    if [ "$?" -eq 0 ];then
+        return 0
+    fi
+
+    return 1
+}
+
+# implement
+load()
+{
+    copyright
+    printf "${COLOR['YELLOW']}load${COLOR['NC']} \n"
+
+
+
     if [ -e "${STORAGE_DIR}/${STORAGE_FILE}" ]; then
         while IFS='=' read -r key value; do
+
+            if [ -z "$key" ] || [ -z "$value" ]; then
+                continue
+            fi
+
             value=$(parse_path "$value" "$STORAGE_DIR")    
 
             if [ -e "$value" ]; then
-                ANCHORS["$key"]="$value"
                 g_ANCHORS["$key"]="$value"
             else
                 echo "Error:key [${key}]'s path: {$value}  does not exist. Skipping."
@@ -215,68 +165,169 @@ load_anchor(){
     fi
 }
 
-list_anchor() {
-    QING='\033[1;36m'
-    RED='\033[01;31m'
-    GREEN='\033[01;32m'
-    BLUE='\033[01;34m'
-    NC='\033[0m'
+clear_anchor()
+{
+    unset l_ANCHORS[$1]
+    unset g_ANCHORS[$1]
+    sed "/^$1=/d" "$STORAGE_DIR/$STORAGE_FILE" -i
+}
 
 
+add_anchor()
+{
+    local anchor="$1"
+    local path="$2"
+    local -n ANCHORS="${3}"
+
+    if [ -n "${g_ANCHORS[$anchor]}" ] || [ -n "${l_ANCHORS[$anchor]}" ];then
+        echo "[$anchor] already existed"
+        read -p "Do you want to update it? (y/n): " choice
+        case "$choice" in
+            y|Y )
+                clear_anchor "$anchor" 
+                ANCHORS[$anchor]="$path"
+                echo "update anchor [$anchor] -> $path"
+
+                return 0
+                ;;
+            * )
+                echo "[$anchor] does not update"
+                return 1
+                ;;
+        esac
+    else
+        ANCHORS[$anchor]="$path"
+
+        echo "add anchor [$anchor] -> $path"
+        return 0
+    fi
+}
+
+add()
+{
+    copyright
+    printf "${COLOR['YELLOW']}add${COLOR['NC']} \n"
+
+    local anchor="$1"
+    local path=$(parse_path "$2" "$(pwd)")
+    local arg="$3"
+
+    # size right 2~3
+    if [ "$#" -lt 2 ] || [ "$#" -gt 3 ];then
+        help
+        return 1
+    fi
+
+    if [ "$#" -eq 2 ];then
+        arg="-l"
+    fi
+
+    valid "$anchor" "$path" "$arg"
+    if [ "$?" -eq 1 ];then
+        if [ "$arg" == '-g' ];then
+            add_anchor "$anchor" "$path" g_ANCHORS
+
+            if [ "$?" -eq 0 ];then
+                echo "$anchor=$path" >> "${STORAGE_DIR}/${STORAGE_FILE}"
+            fi
+        else
+            add_anchor "$anchor" "$path" l_ANCHORS
+        fi
+        return 0
+    else
+        echo "add anchor fail ,please make sure path exist or check help"
+        return 1
+    fi
+}
+
+
+clr()
+{
+    if [ -n "$1" ];then
+        copyright
+        printf "${COLOR['YELLOW']}clear${COLOR['NC']} "
+
+        echo "[$1]"
+        clear_anchor "$1"
+    else
+        help
+    fi
+
+}
+
+list()
+{
+    copyright
+    printf "${COLOR['YELLOW']}list${COLOR['NC']}\n"
 
     max_length=0
-    for key in "${!ANCHORS[@]}"; do
+    for key in "${!g_ANCHORS[@]}"; do
+        if [ ${#key} -gt $max_length ]; then
+            max_length=${#key}
+        fi
+    done
+    for key in "${!l_ANCHORS[@]}"; do
         if [ ${#key} -gt $max_length ]; then
             max_length=${#key}
         fi
     done
 
-    max_length1=1
-    for value in "${!ANCHORS[@]}"; do
-        if [ ${#value} -gt $max_length1 ]; then
-            max_length1=${#value}
-        fi
-    done
+    if [ "${#g_ANCHORS[@]}" -eq 0 ] && [ "${#l_ANCHORS[@]}" -eq 0 ];then
+        printf "No any anchor\n"
+        return 1
+    fi
 
+    if [ "${#g_ANCHORS[@]}" -ge 1 ]; then
+        printf "\n${COLOR['QING']}Global anchor${COLOR['NC']}\n"
 
-    printf "${RED}Powered by anchor${NC}\n\n"
+        for i in "${!g_ANCHORS[@]}"; do
+            printf "${COLOR['QING']}%-${max_length}s${NC} ${COLOR['GREEN']}->${COLOR['NC']} ${COLOR['BLUE']}%s${COLOR['NC']}\n" "$i" "${g_ANCHORS[$i]}"
+        done
 
+    fi
 
-    for i in "${!g_ANCHORS[@]}"; do
-        printf "${QING}%-${max_length}s${NC} ${GREEN}->${NC} ${BLUE}%s${NC}\n" "$i" "${g_ANCHORS[$i]}"
-    done
+    if [ "${#l_ANCHORS[@]}" -ge 1 ]; then
+        printf "\nLocal anchor\n"
 
+        for i in "${!l_ANCHORS[@]}"; do
+            printf "%-${max_length}s ${COLOR['GREEN']}->${COLOR['NC']} ${COLOR['BLUE']}%s${COLOR['NC']}\n" "$i" "${l_ANCHORS[$i]}"
+        done
+    fi
 
-    for i in "${!ANCHORS[@]}"; do
-        if [ !  -n "${g_ANCHORS[$i]}"  ];then
-           printf "%-${max_length}s ${GREEN}->${NC} ${BLUE}%s${NC}\n" "$i" "${ANCHORS[$i]}"
-        fi
-    done
-
-
+    return 0
 }
 
-goto_anchor(){
-
+to()
+{
     local anchor="$1"
 
-    if [ -z "$anchor" ]; then
+    if [ ! -n "$anchor" ]; then
         help
         return 1
     fi
 
-    if [ -n "${ANCHORS[$anchor]}" ]; then
-        cd  "${ANCHORS[$anchor]}"
+    if [ -n "${l_ANCHORS[$anchor]}" ]; then
+        copyright
+        printf "${COLOR['YELLOW']}goto${COLOR['NC']} "
+        echo "$anchor"
+        cd  "${l_ANCHORS[$anchor]}"
+        return 0
+    elif [ -n "${g_ANCHORS[$anchor]}" ];then
+        copyright
+        printf "${COLOR['YELLOW']}goto${COLOR['NC']} "
+
+        echo "$anchor"
+        cd "${g_ANCHORS[$anchor]}"
         return 0
     else
+        copyright
         echo "[$anchor] does not exist"
         return 1
     fi
-
 }
 
-export -f anchor_help
-export -f  add_anchor
-export -f load_anchor
-export -f list_anchor
-export -f goto_anchor
+export -f to
+export -f add
+export -f load
+export -f clr
+export -f list
