@@ -2,7 +2,7 @@
 
 # set adaptable color
 
-STORAGE_DIR='/home/cpp'
+STORAGE_DIR='/home/cpp/anchor'
 STORAGE_FILE='.anchor'
 
 declare -A COLOR
