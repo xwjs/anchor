@@ -2,7 +2,7 @@
 
 # set adaptable color
 
-STORAGE_DIR='/home/cpp/anchor'
+STORAGE_DIR='/home/cpp'
 STORAGE_FILE='.anchor'
 
 declare -A COLOR
@@ -79,7 +79,7 @@ is_valid_anchor()
 {
     local anchor="$1"
 
-    if [[  "$anchor" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$  ]];then
+    if [[  "$anchor" =~ ^[[:graph:]]+$ ]];then
         return 1
     else
         return 0
